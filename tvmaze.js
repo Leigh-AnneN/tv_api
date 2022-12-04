@@ -1,8 +1,12 @@
 "use strict";
 
-const $showsList = $("#shows-list");
-const $episodesArea = $("#episodes-area");
-const $searchForm = $("#search-form");
+const MISSING_IMAGE_URL = "https://tinyurl.com/missing-tv";
+const TVMAZE_API_URL = "http://api.tvmaze.com/";
+
+const $showsList = $("#showsList");
+const $episodesList = $("#episodesList");
+const $episodesArea = $("#episodesArea");
+const $searchForm = $("#searchForm");
 
 
 /** Given a search term, search for tv shows that match that query.
@@ -11,28 +15,23 @@ const $searchForm = $("#search-form");
  *    Each show object should contain exactly: {id, name, summary, image}
  *    (if no image URL given by API, put in a default image URL)
  */
-const $searchQuery = ("#search-query");
 
-async function getShowsByTerm($searchQuery) {
-  // ADD: Remove placeholder & make request to TVMaze search shows API.
-  let searchTerm = $searchQuery.val();
-  // $searchInput.val("");
+async function getShowsByTerm(term) {
+  const response = await axios({
+    url: `${TVMAZE_API_URL}search/shows?q=${term}`,
+    method: "GET",
+  });
 
-  const response = await axios.get("http://api.tvmaze.com/search/shows", {
-      params: {
-          q : searchTerm
-      }
-      
-    });
-    const entry = [
-      {id: response.id,
-      name: response.summary,
-      image: response.image.medium
-}]
-$showsList.append(entry);
-  };
-
-  
+  return response.data.map(result => {
+    const show = result.show;
+    return {
+      id: show.id,
+      name: show.name,
+      summary: show.summary,
+      image: show.image ? show.image.medium : MISSING_IMAGE_URL,
+    };
+  });
+}
 
 
 /** Given list of shows, create markup for each and to DOM */
@@ -44,10 +43,7 @@ function populateShows(shows) {
     const $show = $(
         `<div data-show-id="${show.id}" class="Show col-md-12 col-lg-6 mb-4">
          <div class="media">
-           <img 
-              src="http://static.tvmaze.com/uploads/images/medium_portrait/160/401704.jpg" 
-              alt="Bletchly Circle San Francisco" 
-              class="w-25 mr-3">
+           <img src="${show.image}" alt="${show.name}" class="w-25 mr-3">
            <div class="media-body">
              <h5 class="text-primary">${show.name}</h5>
              <div><small>${show.summary}</small></div>
@@ -59,7 +55,8 @@ function populateShows(shows) {
        </div>
       `);
 
-    $showsList.append($show);  }
+    $showsList.append($show);
+  }
 }
 
 
@@ -85,8 +82,56 @@ $searchForm.on("submit", async function (evt) {
  *      { id, name, season, number }
  */
 
-// async function getEpisodesOfShow(id) { }
+async function getEpisodesOfShow(id) {
+  const response = await axios({
+    url: `${TVMAZE_API_URL}shows/${id}/episodes`,
+    method: "GET",
+  });
 
-/** Write a clear docstring for this function... */
+  return response.data.map(e => ({
+    id: e.id,
+    name: e.name,
+    season: e.season,
+    number: e.number,
+  }));
+}
 
-// function populateEpisodes(episodes) { }
+
+/** Given list of episodes, create markup for each and to DOM */
+
+function populateEpisodes(episodes) {
+  $episodesList.empty();
+
+  for (let episode of episodes) {
+    const $item = $(
+        `<li>
+         ${episode.name}
+         (season ${episode.season}, episode ${episode.number})
+       </li>
+      `);
+
+    $episodesList.append($item);
+  }
+
+  $episodesArea.show();
+}
+
+
+/** Handle click on episodes button: get episodes for show and display */
+
+async function getEpisodesAndDisplay(evt) {
+  // here's one way to get the ID of the show: search "closest" ancestor
+  // with the class of .Show (which is put onto the enclosing div, which
+  // has the .data-show-id attribute).
+  const showId = $(evt.target).closest(".Show").data("show-id");
+
+  // here's another way to get the ID of the show: search "closest" ancestor
+  // that has an attribute of 'data-show-id'. This is called an "attribute
+  // selector", and it's part of CSS selectors worth learning.
+  // const showId = $(evt.target).closest("[data-show-id]").data("show-id");
+
+  const episodes = await getEpisodesOfShow(showId);
+  populateEpisodes(episodes);
+}
+
+$showsList.on("click", ".Show-getEpisodes", getEpisodesAndDisplay);
